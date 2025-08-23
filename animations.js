@@ -123,7 +123,7 @@ class RotatingPolygons extends Animation {
         this.ctx.lineWidth = lineWidth;
 
         for (let i = 0; i < numPolygons; i++) {
-            const radius = minRadius + (maxRadius - minRadius) * (i / (numPolygons - 1));
+            const radius = numPolygons === 1 ? maxRadius : minRadius + (maxRadius - minRadius) * (i / (numPolygons - 1));
             const rotation = this.rotationPhase + (i * Math.PI / numPolygons);
             
             // Calculate color
