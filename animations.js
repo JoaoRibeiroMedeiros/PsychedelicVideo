@@ -83,6 +83,13 @@ class Animation {
 }
 
 class RotatingPolygons extends Animation {
+    constructor(canvas, params = {}) {
+        super(canvas, params);
+        this.rotationPhase = 0;
+        this.lastTime = 0;
+        this.lastRotationSpeed = this.params.rotationSpeed;
+    }
+
     getDefaultParams() {
         return {
             ...super.getDefaultParams(),
@@ -96,6 +103,18 @@ class RotatingPolygons extends Animation {
         };
     }
 
+    update(deltaTime) {
+        super.update(deltaTime);
+        
+        if (this.isPlaying) {
+            // Update rotation phase continuously, preserving it when speed changes
+            const timeDelta = this.time - this.lastTime;
+            this.rotationPhase += timeDelta * this.params.rotationSpeed * 0.01;
+            this.lastTime = this.time;
+            this.lastRotationSpeed = this.params.rotationSpeed;
+        }
+    }
+
     render() {
         super.render();
 
@@ -105,7 +124,7 @@ class RotatingPolygons extends Animation {
 
         for (let i = 0; i < numPolygons; i++) {
             const radius = minRadius + (maxRadius - minRadius) * (i / (numPolygons - 1));
-            const rotation = this.time * rotationSpeed * 0.01 + (i * Math.PI / numPolygons);
+            const rotation = this.rotationPhase + (i * Math.PI / numPolygons);
             
             // Calculate color
             const hue = (this.time * 0.001 + i * 0.2 + colorShift) % 1.0;
@@ -127,6 +146,12 @@ class RotatingPolygons extends Animation {
             }
             this.ctx.stroke();
         }
+    }
+
+    reset() {
+        super.reset();
+        this.rotationPhase = 0;
+        this.lastTime = 0;
     }
 
     getControlSchema() {
