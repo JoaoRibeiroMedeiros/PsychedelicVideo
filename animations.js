@@ -242,6 +242,7 @@ class ParticleSystem extends Animation {
             particleCount: 100,
             gravity: 0.1,
             bounceDamping: 0.8,
+            airDamping: 0.999,
             trailLength: 20,
             colorMode: 'velocity'
         };
@@ -265,12 +266,16 @@ class ParticleSystem extends Animation {
         
         if (!this.isPlaying) return;
 
-        const { gravity, bounceDamping, trailLength } = this.params;
+        const { gravity, bounceDamping, airDamping, trailLength } = this.params;
         const dt = deltaTime * 0.01;
 
         this.particles.forEach(particle => {
             // Apply gravity
             particle.vy += gravity;
+            
+            // Apply air damping (energy loss over time)
+            particle.vx *= airDamping;
+            particle.vy *= airDamping;
             
             // Update position
             particle.x += particle.vx * dt;
@@ -328,6 +333,7 @@ class ParticleSystem extends Animation {
             particleCount: { type: 'range', min: 10, max: 200, step: 10, label: 'Particle Count' },
             gravity: { type: 'range', min: 0, max: 1, step: 0.01, label: 'Gravity' },
             bounceDamping: { type: 'range', min: 0.1, max: 1.0, step: 0.01, label: 'Bounce Damping' },
+            airDamping: { type: 'range', min: 0.990, max: 1.000, step: 0.001, label: 'Air Damping' },
             trailLength: { type: 'range', min: 5, max: 50, step: 1, label: 'Trail Length' },
             colorMode: { type: 'select', options: ['velocity', 'white'], label: 'Color Mode' }
         };
