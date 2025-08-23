@@ -340,6 +340,166 @@ class ParticleSystem extends Animation {
     }
 }
 
+class PerlinNoise extends Animation {
+    constructor(canvas, params = {}) {
+        super(canvas, params);
+        this.noiseOffset = 0;
+        this.permutation = this.generatePermutation();
+    }
+
+    getDefaultParams() {
+        return {
+            ...super.getDefaultParams(),
+            scale: 0.01,
+            octaves: 4,
+            persistence: 0.5,
+            lacunarity: 2.0,
+            timeSpeed: 1.0,
+            colorMode: 'rainbow',
+            brightness: 1.0
+        };
+    }
+
+    // Simple Perlin noise implementation
+    generatePermutation() {
+        const p = [];
+        for (let i = 0; i < 256; i++) p[i] = i;
+        
+        // Shuffle array
+        for (let i = 255; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [p[i], p[j]] = [p[j], p[i]];
+        }
+        
+        // Duplicate for wrapping
+        for (let i = 0; i < 256; i++) p[256 + i] = p[i];
+        return p;
+    }
+
+    fade(t) {
+        return t * t * t * (t * (t * 6 - 15) + 10);
+    }
+
+    lerp(a, b, t) {
+        return a + t * (b - a);
+    }
+
+    grad(hash, x, y, z) {
+        const h = hash & 15;
+        const u = h < 8 ? x : y;
+        const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+        return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    }
+
+    noise(x, y, z) {
+        const X = Math.floor(x) & 255;
+        const Y = Math.floor(y) & 255;
+        const Z = Math.floor(z) & 255;
+        
+        x -= Math.floor(x);
+        y -= Math.floor(y);
+        z -= Math.floor(z);
+        
+        const u = this.fade(x);
+        const v = this.fade(y);
+        const w = this.fade(z);
+        
+        const A = this.permutation[X] + Y;
+        const AA = this.permutation[A] + Z;
+        const AB = this.permutation[A + 1] + Z;
+        const B = this.permutation[X + 1] + Y;
+        const BA = this.permutation[B] + Z;
+        const BB = this.permutation[B + 1] + Z;
+        
+        return this.lerp(
+            this.lerp(
+                this.lerp(this.grad(this.permutation[AA], x, y, z),
+                         this.grad(this.permutation[BA], x - 1, y, z), u),
+                this.lerp(this.grad(this.permutation[AB], x, y - 1, z),
+                         this.grad(this.permutation[BB], x - 1, y - 1, z), u), v),
+            this.lerp(
+                this.lerp(this.grad(this.permutation[AA + 1], x, y, z - 1),
+                         this.grad(this.permutation[BA + 1], x - 1, y, z - 1), u),
+                this.lerp(this.grad(this.permutation[AB + 1], x, y - 1, z - 1),
+                         this.grad(this.permutation[BB + 1], x - 1, y - 1, z - 1), u), v), w);
+    }
+
+    fractalNoise(x, y, z, octaves, persistence, lacunarity) {
+        let value = 0;
+        let amplitude = 1;
+        let frequency = 1;
+        let maxValue = 0;
+        
+        for (let i = 0; i < octaves; i++) {
+            value += this.noise(x * frequency, y * frequency, z * frequency) * amplitude;
+            maxValue += amplitude;
+            amplitude *= persistence;
+            frequency *= lacunarity;
+        }
+        
+        return value / maxValue;
+    }
+
+    render() {
+        super.render();
+
+        const { scale, octaves, persistence, lacunarity, timeSpeed, colorMode, brightness } = this.params;
+        this.noiseOffset += timeSpeed * 0.01;
+        
+        const imageData = this.ctx.createImageData(this.width, this.height);
+        const data = imageData.data;
+
+        for (let x = 0; x < this.width; x++) {
+            for (let y = 0; y < this.height; y++) {
+                const noiseValue = this.fractalNoise(
+                    x * scale, 
+                    y * scale, 
+                    this.noiseOffset,
+                    octaves,
+                    persistence,
+                    lacunarity
+                );
+                
+                const normalized = (noiseValue + 1) / 2; // Convert from [-1,1] to [0,1]
+                const index = (y * this.width + x) * 4;
+                
+                if (colorMode === 'rainbow') {
+                    const hue = (normalized + this.time * 0.0001) % 1.0;
+                    const [r, g, b] = this.hsvToRgb(hue, 0.8, normalized * brightness);
+                    data[index] = r;
+                    data[index + 1] = g;
+                    data[index + 2] = b;
+                } else if (colorMode === 'fire') {
+                    const intensity = normalized * brightness;
+                    data[index] = Math.min(255, intensity * 255 * 2);
+                    data[index + 1] = Math.min(255, intensity * 255 * 1.5);
+                    data[index + 2] = Math.min(255, intensity * 255 * 0.5);
+                } else { // monochrome
+                    const intensity = normalized * brightness * 255;
+                    data[index] = intensity;
+                    data[index + 1] = intensity;
+                    data[index + 2] = intensity;
+                }
+                data[index + 3] = 255; // Alpha
+            }
+        }
+
+        this.ctx.putImageData(imageData, 0, 0);
+    }
+
+    getControlSchema() {
+        return {
+            scale: { type: 'range', min: 0.001, max: 0.05, step: 0.001, label: 'Scale' },
+            octaves: { type: 'range', min: 1, max: 8, step: 1, label: 'Octaves' },
+            persistence: { type: 'range', min: 0.1, max: 1.0, step: 0.1, label: 'Persistence' },
+            lacunarity: { type: 'range', min: 1.0, max: 4.0, step: 0.1, label: 'Lacunarity' },
+            timeSpeed: { type: 'range', min: 0.1, max: 5.0, step: 0.1, label: 'Time Speed' },
+            brightness: { type: 'range', min: 0.1, max: 2.0, step: 0.1, label: 'Brightness' },
+            colorMode: { type: 'select', options: ['rainbow', 'fire', 'monochrome'], label: 'Color Mode' }
+        };
+    }
+}
+
 class Spirograph extends Animation {
     constructor(canvas, params = {}) {
         super(canvas, params);
@@ -415,6 +575,7 @@ const ANIMATIONS = {
     rotating_polygons: RotatingPolygons,
     wave_interference: WaveInterference,
     particle_system: ParticleSystem,
+    perlin_noise: PerlinNoise,
     spirograph: Spirograph
 };
 
