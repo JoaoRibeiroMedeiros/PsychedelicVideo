@@ -680,7 +680,7 @@ class Fractal extends Animation {
         return {
             fractalType: { type: 'select', options: ['mandelbrot', 'julia', 'burning_ship'], label: 'Fractal Type' },
             maxIterations: { type: 'range', min: 20, max: 300, step: 10, label: 'Max Iterations' },
-            zoomSpeed: { type: 'range', min: 0.0, max: 5.0, step: 0.1, label: 'Zoom Speed' },
+            zoomSpeed: { type: 'range', min: 0.0, max: 20.0, step: 0.1, label: 'Zoom Speed' },
             colorSpeed: { type: 'range', min: 0.0, max: 10.0, step: 0.1, label: 'Color Speed' },
             centerX: { type: 'range', min: -2.0, max: 2.0, step: 0.01, label: 'Center X' },
             centerY: { type: 'range', min: -2.0, max: 2.0, step: 0.01, label: 'Center Y' },
