@@ -334,7 +334,7 @@ class ParticleSystem extends Animation {
             gravity: { type: 'range', min: 0, max: 1, step: 0.01, label: 'Gravity' },
             bounceDamping: { type: 'range', min: 0.0, max: 1.0, step: 0.01, label: 'Bounce Damping' },
             airDamping: { type: 'range', min: 0.0, max: 1.0, step: 0.01, label: 'Air Damping' },
-            trailLength: { type: 'range', min: 5, max: 50, step: 1, label: 'Trail Length' },
+            trailLength: { type: 'range', min: 5, max: 200, step: 5, label: 'Trail Length' },
             colorMode: { type: 'select', options: ['velocity', 'white'], label: 'Color Mode' }
         };
     }
