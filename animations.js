@@ -500,6 +500,197 @@ class PerlinNoise extends Animation {
     }
 }
 
+class Fractal extends Animation {
+    constructor(canvas, params = {}) {
+        super(canvas, params);
+        this.zoom = 1;
+        this.centerX = -0.5;
+        this.centerY = 0;
+        this.colorOffset = 0;
+    }
+
+    getDefaultParams() {
+        return {
+            ...super.getDefaultParams(),
+            maxIterations: 100,
+            zoomSpeed: 1.0,
+            colorSpeed: 1.0,
+            fractalType: 'mandelbrot',
+            colorMode: 'rainbow',
+            brightness: 1.0,
+            contrast: 1.0,
+            centerX: -0.5,
+            centerY: 0.0
+        };
+    }
+
+    mandelbrot(cx, cy, maxIter) {
+        let x = 0, y = 0;
+        let x2 = 0, y2 = 0;
+        let iter = 0;
+        
+        while (x2 + y2 <= 4 && iter < maxIter) {
+            y = 2 * x * y + cy;
+            x = x2 - y2 + cx;
+            x2 = x * x;
+            y2 = y * y;
+            iter++;
+        }
+        
+        if (iter === maxIter) return 0;
+        
+        // Smooth coloring
+        const log_zn = Math.log(x2 + y2) / 2;
+        const nu = Math.log(log_zn / Math.log(2)) / Math.log(2);
+        return iter + 1 - nu;
+    }
+
+    julia(cx, cy, maxIter, juliaC = { r: -0.7, i: 0.27015 }) {
+        let x = cx, y = cy;
+        let x2 = x * x, y2 = y * y;
+        let iter = 0;
+        
+        while (x2 + y2 <= 4 && iter < maxIter) {
+            y = 2 * x * y + juliaC.i;
+            x = x2 - y2 + juliaC.r;
+            x2 = x * x;
+            y2 = y * y;
+            iter++;
+        }
+        
+        if (iter === maxIter) return 0;
+        
+        const log_zn = Math.log(x2 + y2) / 2;
+        const nu = Math.log(log_zn / Math.log(2)) / Math.log(2);
+        return iter + 1 - nu;
+    }
+
+    burning_ship(cx, cy, maxIter) {
+        let x = 0, y = 0;
+        let x2 = 0, y2 = 0;
+        let iter = 0;
+        
+        while (x2 + y2 <= 4 && iter < maxIter) {
+            y = 2 * Math.abs(x * y) + cy;
+            x = x2 - y2 + cx;
+            x2 = x * x;
+            y2 = y * y;
+            iter++;
+        }
+        
+        if (iter === maxIter) return 0;
+        
+        const log_zn = Math.log(x2 + y2) / 2;
+        const nu = Math.log(log_zn / Math.log(2)) / Math.log(2);
+        return iter + 1 - nu;
+    }
+
+    update(deltaTime) {
+        super.update(deltaTime);
+        
+        if (this.isPlaying) {
+            // Update zoom
+            this.zoom *= 1 + (this.params.zoomSpeed * 0.01 * deltaTime * 0.001);
+            
+            // Update color cycling
+            this.colorOffset += this.params.colorSpeed * deltaTime * 0.0001;
+            
+            // Update center based on parameters
+            this.centerX = this.params.centerX;
+            this.centerY = this.params.centerY;
+        }
+    }
+
+    render() {
+        super.render();
+
+        const { maxIterations, fractalType, colorMode, brightness, contrast } = this.params;
+        const imageData = this.ctx.createImageData(this.width, this.height);
+        const data = imageData.data;
+
+        const scale = 4.0 / (this.zoom * Math.min(this.width, this.height));
+        
+        for (let px = 0; px < this.width; px++) {
+            for (let py = 0; py < this.height; py++) {
+                const x = (px - this.width / 2) * scale + this.centerX;
+                const y = (py - this.height / 2) * scale + this.centerY;
+                
+                let iterations;
+                switch (fractalType) {
+                    case 'julia':
+                        iterations = this.julia(x, y, maxIterations);
+                        break;
+                    case 'burning_ship':
+                        iterations = this.burning_ship(x, y, maxIterations);
+                        break;
+                    default: // mandelbrot
+                        iterations = this.mandelbrot(x, y, maxIterations);
+                }
+                
+                const index = (py * this.width + px) * 4;
+                
+                if (iterations === 0) {
+                    // Inside the set - black
+                    data[index] = 0;
+                    data[index + 1] = 0;
+                    data[index + 2] = 0;
+                } else {
+                    // Outside the set - colorize
+                    const normalized = (iterations / maxIterations) * contrast;
+                    
+                    if (colorMode === 'rainbow') {
+                        const hue = (normalized + this.colorOffset) % 1.0;
+                        const [r, g, b] = this.hsvToRgb(hue, 0.8, brightness);
+                        data[index] = r;
+                        data[index + 1] = g;
+                        data[index + 2] = b;
+                    } else if (colorMode === 'fire') {
+                        const intensity = normalized * brightness;
+                        data[index] = Math.min(255, intensity * 255 * 2);
+                        data[index + 1] = Math.min(255, intensity * 255 * 1.2);
+                        data[index + 2] = Math.min(255, intensity * 255 * 0.3);
+                    } else if (colorMode === 'ocean') {
+                        const intensity = normalized * brightness;
+                        data[index] = Math.min(255, intensity * 255 * 0.2);
+                        data[index + 1] = Math.min(255, intensity * 255 * 0.8);
+                        data[index + 2] = Math.min(255, intensity * 255 * 1.5);
+                    } else { // monochrome
+                        const intensity = normalized * brightness * 255;
+                        data[index] = intensity;
+                        data[index + 1] = intensity;
+                        data[index + 2] = intensity;
+                    }
+                }
+                data[index + 3] = 255; // Alpha
+            }
+        }
+
+        this.ctx.putImageData(imageData, 0, 0);
+    }
+
+    reset() {
+        super.reset();
+        this.zoom = 1;
+        this.centerX = this.params.centerX;
+        this.centerY = this.params.centerY;
+        this.colorOffset = 0;
+    }
+
+    getControlSchema() {
+        return {
+            fractalType: { type: 'select', options: ['mandelbrot', 'julia', 'burning_ship'], label: 'Fractal Type' },
+            maxIterations: { type: 'range', min: 20, max: 300, step: 10, label: 'Max Iterations' },
+            zoomSpeed: { type: 'range', min: 0.0, max: 5.0, step: 0.1, label: 'Zoom Speed' },
+            colorSpeed: { type: 'range', min: 0.0, max: 10.0, step: 0.1, label: 'Color Speed' },
+            centerX: { type: 'range', min: -2.0, max: 2.0, step: 0.01, label: 'Center X' },
+            centerY: { type: 'range', min: -2.0, max: 2.0, step: 0.01, label: 'Center Y' },
+            brightness: { type: 'range', min: 0.1, max: 2.0, step: 0.1, label: 'Brightness' },
+            contrast: { type: 'range', min: 0.1, max: 3.0, step: 0.1, label: 'Contrast' },
+            colorMode: { type: 'select', options: ['rainbow', 'fire', 'ocean', 'monochrome'], label: 'Color Mode' }
+        };
+    }
+}
+
 class Spirograph extends Animation {
     constructor(canvas, params = {}) {
         super(canvas, params);
@@ -576,6 +767,7 @@ const ANIMATIONS = {
     wave_interference: WaveInterference,
     particle_system: ParticleSystem,
     perlin_noise: PerlinNoise,
+    fractal: Fractal,
     spirograph: Spirograph
 };
 
