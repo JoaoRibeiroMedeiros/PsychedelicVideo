@@ -155,6 +155,20 @@ class PsychedelicApp {
                     
                     controlDiv.appendChild(label);
                     controlDiv.appendChild(select);
+                    
+                } else if (config.type === 'checkbox') {
+                    const label = document.createElement('label');
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.checked = this.animation.params[key];
+                    
+                    checkbox.addEventListener('change', (e) => {
+                        this.animation.updateParams({ [key]: e.target.checked });
+                    });
+                    
+                    label.appendChild(checkbox);
+                    label.appendChild(document.createTextNode(' ' + config.label));
+                    controlDiv.appendChild(label);
                 }
                 
                 groupDiv.appendChild(controlDiv);

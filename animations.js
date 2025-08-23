@@ -691,6 +691,233 @@ class Fractal extends Animation {
     }
 }
 
+class CombinationMode extends Animation {
+    constructor(canvas, params = {}) {
+        super(canvas, params);
+        this.animations = [];
+        this.canvases = [];
+        this.contexts = [];
+        this.initializeAnimations();
+    }
+
+    getDefaultParams() {
+        return {
+            ...super.getDefaultParams(),
+            animation1: 'rotating_polygons',
+            animation2: 'wave_interference',
+            blendMode: 'add',
+            opacity1: 0.7,
+            opacity2: 0.7,
+            sync: true,
+            offset2: 0.0
+        };
+    }
+
+    initializeAnimations() {
+        // Clean up existing animations
+        this.animations = [];
+        this.canvases = [];
+        this.contexts = [];
+
+        // Create two off-screen canvases for the animations
+        for (let i = 0; i < 2; i++) {
+            const canvas = document.createElement('canvas');
+            canvas.width = this.width;
+            canvas.height = this.height;
+            this.canvases.push(canvas);
+            this.contexts.push(canvas.getContext('2d'));
+        }
+
+        this.createAnimations();
+    }
+
+    createAnimations() {
+        const { animation1, animation2 } = this.params;
+        
+        // Create first animation
+        if (ANIMATIONS[animation1]) {
+            this.animations[0] = new ANIMATIONS[animation1](this.canvases[0]);
+            this.animations[0].play();
+        }
+
+        // Create second animation
+        if (ANIMATIONS[animation2]) {
+            this.animations[1] = new ANIMATIONS[animation2](this.canvases[1]);
+            this.animations[1].play();
+        }
+    }
+
+    updateParams(newParams) {
+        super.updateParams(newParams);
+        
+        // Recreate animations if types changed
+        if (newParams.animation1 || newParams.animation2) {
+            this.createAnimations();
+        }
+    }
+
+    update(deltaTime) {
+        super.update(deltaTime);
+        
+        if (this.isPlaying && this.animations.length >= 2) {
+            // Update first animation normally
+            if (this.animations[0]) {
+                this.animations[0].update(deltaTime);
+            }
+
+            // Update second animation with optional offset
+            if (this.animations[1]) {
+                if (this.params.sync) {
+                    this.animations[1].update(deltaTime);
+                } else {
+                    // Apply time offset for second animation
+                    const offsetTime = deltaTime * (1 + this.params.offset2);
+                    this.animations[1].update(offsetTime);
+                }
+            }
+        }
+    }
+
+    blendPixels(pixel1, pixel2, mode, opacity1, opacity2) {
+        const r1 = pixel1[0] * opacity1;
+        const g1 = pixel1[1] * opacity1;
+        const b1 = pixel1[2] * opacity1;
+        
+        const r2 = pixel2[0] * opacity2;
+        const g2 = pixel2[1] * opacity2;
+        const b2 = pixel2[2] * opacity2;
+
+        switch (mode) {
+            case 'add':
+                return [
+                    Math.min(255, r1 + r2),
+                    Math.min(255, g1 + g2),
+                    Math.min(255, b1 + b2)
+                ];
+            
+            case 'multiply':
+                return [
+                    (r1 * r2) / 255,
+                    (g1 * g2) / 255,
+                    (b1 * b2) / 255
+                ];
+            
+            case 'screen':
+                return [
+                    255 - ((255 - r1) * (255 - r2)) / 255,
+                    255 - ((255 - g1) * (255 - g2)) / 255,
+                    255 - ((255 - b1) * (255 - b2)) / 255
+                ];
+            
+            case 'overlay':
+                const blendChannel = (base, overlay) => {
+                    if (base < 128) {
+                        return (2 * base * overlay) / 255;
+                    } else {
+                        return 255 - (2 * (255 - base) * (255 - overlay)) / 255;
+                    }
+                };
+                return [
+                    blendChannel(r1, r2),
+                    blendChannel(g1, g2),
+                    blendChannel(b1, b2)
+                ];
+            
+            case 'difference':
+                return [
+                    Math.abs(r1 - r2),
+                    Math.abs(g1 - g2),
+                    Math.abs(b1 - b2)
+                ];
+            
+            case 'exclusion':
+                return [
+                    r1 + r2 - (2 * r1 * r2) / 255,
+                    g1 + g2 - (2 * g1 * g2) / 255,
+                    b1 + b2 - (2 * b1 * b2) / 255
+                ];
+            
+            default: // normal/mix
+                return [
+                    (r1 + r2) / 2,
+                    (g1 + g2) / 2,
+                    (b1 + b2) / 2
+                ];
+        }
+    }
+
+    render() {
+        super.render();
+
+        if (this.animations.length < 2) return;
+
+        const { blendMode, opacity1, opacity2 } = this.params;
+
+        // Render both animations to their canvases
+        if (this.animations[0]) {
+            this.animations[0].render();
+        }
+        if (this.animations[1]) {
+            this.animations[1].render();
+        }
+
+        // Get image data from both canvases
+        const imageData1 = this.contexts[0].getImageData(0, 0, this.width, this.height);
+        const imageData2 = this.contexts[1].getImageData(0, 0, this.width, this.height);
+        
+        // Create output image data
+        const outputData = this.ctx.createImageData(this.width, this.height);
+        
+        // Blend the pixels
+        for (let i = 0; i < imageData1.data.length; i += 4) {
+            const pixel1 = [imageData1.data[i], imageData1.data[i + 1], imageData1.data[i + 2]];
+            const pixel2 = [imageData2.data[i], imageData2.data[i + 1], imageData2.data[i + 2]];
+            
+            const blended = this.blendPixels(pixel1, pixel2, blendMode, opacity1, opacity2);
+            
+            outputData.data[i] = blended[0];
+            outputData.data[i + 1] = blended[1];
+            outputData.data[i + 2] = blended[2];
+            outputData.data[i + 3] = 255; // Alpha
+        }
+
+        // Draw the blended result
+        this.ctx.putImageData(outputData, 0, 0);
+    }
+
+    reset() {
+        super.reset();
+        if (this.animations[0]) this.animations[0].reset();
+        if (this.animations[1]) this.animations[1].reset();
+    }
+
+    play() {
+        super.play();
+        if (this.animations[0]) this.animations[0].play();
+        if (this.animations[1]) this.animations[1].play();
+    }
+
+    pause() {
+        super.pause();
+        if (this.animations[0]) this.animations[0].pause();
+        if (this.animations[1]) this.animations[1].pause();
+    }
+
+    getControlSchema() {
+        const animationOptions = Object.keys(ANIMATIONS).filter(key => key !== 'combination');
+        
+        return {
+            animation1: { type: 'select', options: animationOptions, label: 'Animation 1' },
+            animation2: { type: 'select', options: animationOptions, label: 'Animation 2' },
+            blendMode: { type: 'select', options: ['add', 'multiply', 'screen', 'overlay', 'difference', 'exclusion', 'normal'], label: 'Blend Mode' },
+            opacity1: { type: 'range', min: 0.0, max: 1.0, step: 0.1, label: 'Opacity 1' },
+            opacity2: { type: 'range', min: 0.0, max: 1.0, step: 0.1, label: 'Opacity 2' },
+            sync: { type: 'checkbox', label: 'Sync Animations' },
+            offset2: { type: 'range', min: -2.0, max: 2.0, step: 0.1, label: 'Time Offset 2' }
+        };
+    }
+}
+
 class Spirograph extends Animation {
     constructor(canvas, params = {}) {
         super(canvas, params);
@@ -768,6 +995,7 @@ const ANIMATIONS = {
     particle_system: ParticleSystem,
     perlin_noise: PerlinNoise,
     fractal: Fractal,
+    combination: CombinationMode,
     spirograph: Spirograph
 };
 
