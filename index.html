@@ -187,6 +187,58 @@
             transition: all 0.3s ease-in-out;
         }
 
+        /* Dual column mixer layout */
+        .mixer-dual-columns {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .mixer-column {
+            flex: 1;
+            border-radius: 8px;
+            padding: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .track1-column {
+            border: 2px solid #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .track2-column {
+            border: 2px solid #4ecdc4;
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .mixer-column h3 {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 1em;
+            padding-bottom: 8px;
+            border-bottom: 1px solid currentColor;
+        }
+
+        .mixer-column .control {
+            margin-bottom: 12px;
+        }
+
+        .mixer-column .control label {
+            font-size: 0.85em;
+        }
+
+        /* Responsive design for mixer */
+        @media (max-width: 1200px) {
+            .mixer-dual-columns {
+                flex-direction: column;
+            }
+            
+            .mixer-column {
+                max-height: 300px;
+            }
+        }
+
         @media (max-width: 768px) {
             .main-container {
                 flex-direction: column;

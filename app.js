@@ -204,26 +204,13 @@ class PsychedelicApp {
         const controlsContainer = document.getElementById('specificControls');
         controlsContainer.innerHTML = '';
         
-        const schema = this.animation.getControlSchema();
-        
-        if (Object.keys(schema).length > 0) {
-            // Group controls by their group property (for combination mode)
-            const groupedControls = {};
-            const ungroupedControls = {};
-            
-            Object.entries(schema).forEach(([key, config]) => {
-                if (config.group) {
-                    if (!groupedControls[config.group]) {
-                        groupedControls[config.group] = {};
-                    }
-                    groupedControls[config.group][key] = config;
-                } else {
-                    ungroupedControls[key] = config;
-                }
-            });
-            
-            // Create ungrouped controls first (main controls)
-            if (Object.keys(ungroupedControls).length > 0) {
+        if (this.mixerMode && this.combinationAnimation) {
+            // Mixer mode - create dual column layout
+            this.setupMixerControls(controlsContainer);
+        } else {
+            // Single animation mode
+            const schema = this.animation.getControlSchema();
+            if (Object.keys(schema).length > 0) {
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'control-group';
                 
@@ -231,27 +218,68 @@ class PsychedelicApp {
                 title.textContent = 'Animation Settings';
                 groupDiv.appendChild(title);
                 
-                this.createControlsForGroup(ungroupedControls, groupDiv);
+                this.createControlsForGroup(schema, groupDiv, this.animation);
                 controlsContainer.appendChild(groupDiv);
             }
-            
-            // Create grouped controls (for combination mode)
-            Object.entries(groupedControls).forEach(([groupName, controls]) => {
-                const groupDiv = document.createElement('div');
-                groupDiv.className = 'control-group mixer-track';
-                
-                const title = document.createElement('h3');
-                title.textContent = groupName;
-                title.style.color = groupName.includes('Animation 1') ? '#ff6b6b' : '#4ecdc4';
-                groupDiv.appendChild(title);
-                
-                this.createControlsForGroup(controls, groupDiv);
-                controlsContainer.appendChild(groupDiv);
-            });
         }
     }
 
-    createControlsForGroup(controls, parentElement) {
+    setupMixerControls(container) {
+        // Create dual column container
+        const dualColumnContainer = document.createElement('div');
+        dualColumnContainer.className = 'mixer-dual-columns';
+        dualColumnContainer.style.display = 'flex';
+        dualColumnContainer.style.gap = '10px';
+        
+        // Track 1 column
+        const track1Column = document.createElement('div');
+        track1Column.className = 'mixer-column track1-column';
+        track1Column.style.flex = '1';
+        track1Column.style.border = '2px solid #ff6b6b';
+        track1Column.style.borderRadius = '8px';
+        track1Column.style.padding = '10px';
+        track1Column.style.background = 'rgba(255, 107, 107, 0.1)';
+        
+        const track1Title = document.createElement('h3');
+        track1Title.textContent = '🎵 Track 1 Controls';
+        track1Title.style.color = '#ff6b6b';
+        track1Title.style.textAlign = 'center';
+        track1Title.style.marginBottom = '15px';
+        track1Column.appendChild(track1Title);
+        
+        // Track 2 column
+        const track2Column = document.createElement('div');
+        track2Column.className = 'mixer-column track2-column';
+        track2Column.style.flex = '1';
+        track2Column.style.border = '2px solid #4ecdc4';
+        track2Column.style.borderRadius = '8px';
+        track2Column.style.padding = '10px';
+        track2Column.style.background = 'rgba(78, 205, 196, 0.1)';
+        
+        const track2Title = document.createElement('h3');
+        track2Title.textContent = '🎵 Track 2 Controls';
+        track2Title.style.color = '#4ecdc4';
+        track2Title.style.textAlign = 'center';
+        track2Title.style.marginBottom = '15px';
+        track2Column.appendChild(track2Title);
+        
+        // Get controls for both animations
+        if (this.combinationAnimation.animations[0]) {
+            const track1Schema = this.combinationAnimation.animations[0].getControlSchema();
+            this.createControlsForGroup(track1Schema, track1Column, this.combinationAnimation.animations[0], 'track1');
+        }
+        
+        if (this.combinationAnimation.animations[1]) {
+            const track2Schema = this.combinationAnimation.animations[1].getControlSchema();
+            this.createControlsForGroup(track2Schema, track2Column, this.combinationAnimation.animations[1], 'track2');
+        }
+        
+        dualColumnContainer.appendChild(track1Column);
+        dualColumnContainer.appendChild(track2Column);
+        container.appendChild(dualColumnContainer);
+    }
+
+    createControlsForGroup(controls, parentElement, targetAnimation, trackId = null) {
         Object.entries(controls).forEach(([key, config]) => {
             const controlDiv = document.createElement('div');
             controlDiv.className = 'control';
@@ -261,21 +289,8 @@ class PsychedelicApp {
                 const valueSpan = document.createElement('span');
                 valueSpan.className = 'value-display';
                 
-                // Get the current value - handle prefixed keys for combination mode
-                let currentValue;
-                if (key.startsWith('anim1_') || key.startsWith('anim2_')) {
-                    // For combination mode, get value from the specific animation
-                    const animIndex = key.startsWith('anim1_') ? 0 : 1;
-                    const realKey = key.substring(6);
-                    if (this.animation.animations && this.animation.animations[animIndex]) {
-                        currentValue = this.animation.animations[animIndex].params[realKey];
-                    } else {
-                        currentValue = config.min || 0;
-                    }
-                } else {
-                    currentValue = this.animation.params[key];
-                }
-                
+                // Get current value from the target animation
+                const currentValue = targetAnimation.params[key] || config.min || 0;
                 valueSpan.textContent = currentValue;
                 label.innerHTML = `${config.label} `;
                 label.appendChild(valueSpan);
@@ -290,7 +305,8 @@ class PsychedelicApp {
                 input.addEventListener('input', (e) => {
                     const value = parseFloat(e.target.value);
                     valueSpan.textContent = value;
-                    this.animation.updateParams({ [key]: value });
+                    // Update the target animation directly
+                    targetAnimation.updateParams({ [key]: value });
                 });
                 
                 controlDiv.appendChild(label);
@@ -301,22 +317,12 @@ class PsychedelicApp {
                 label.textContent = config.label;
                 
                 const select = document.createElement('select');
+                const currentValue = targetAnimation.params[key];
+                
                 config.options.forEach(option => {
                     const optionElement = document.createElement('option');
                     optionElement.value = option;
                     optionElement.textContent = option;
-                    
-                    // Get current value for comparison
-                    let currentValue;
-                    if (key.startsWith('anim1_') || key.startsWith('anim2_')) {
-                        const animIndex = key.startsWith('anim1_') ? 0 : 1;
-                        const realKey = key.substring(6);
-                        if (this.animation.animations && this.animation.animations[animIndex]) {
-                            currentValue = this.animation.animations[animIndex].params[realKey];
-                        }
-                    } else {
-                        currentValue = this.animation.params[key];
-                    }
                     
                     if (option === currentValue) {
                         optionElement.selected = true;
@@ -325,7 +331,7 @@ class PsychedelicApp {
                 });
                 
                 select.addEventListener('change', (e) => {
-                    this.animation.updateParams({ [key]: e.target.value });
+                    targetAnimation.updateParams({ [key]: e.target.value });
                 });
                 
                 controlDiv.appendChild(label);
@@ -336,24 +342,11 @@ class PsychedelicApp {
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 
-                // Get current value
-                let currentValue;
-                if (key.startsWith('anim1_') || key.startsWith('anim2_')) {
-                    const animIndex = key.startsWith('anim1_') ? 0 : 1;
-                    const realKey = key.substring(6);
-                    if (this.animation.animations && this.animation.animations[animIndex]) {
-                        currentValue = this.animation.animations[animIndex].params[realKey];
-                    } else {
-                        currentValue = false;
-                    }
-                } else {
-                    currentValue = this.animation.params[key];
-                }
-                
+                const currentValue = targetAnimation.params[key] || false;
                 checkbox.checked = currentValue;
                 
                 checkbox.addEventListener('change', (e) => {
-                    this.animation.updateParams({ [key]: e.target.checked });
+                    targetAnimation.updateParams({ [key]: e.target.checked });
                 });
                 
                 label.appendChild(checkbox);
