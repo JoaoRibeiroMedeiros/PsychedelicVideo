@@ -344,6 +344,7 @@ class PerlinNoise extends Animation {
     constructor(canvas, params = {}) {
         super(canvas, params);
         this.noiseOffset = 0;
+        this.zoomLevel = 1.0;
         this.permutation = this.generatePermutation();
     }
 
@@ -355,6 +356,7 @@ class PerlinNoise extends Animation {
             persistence: 0.5,
             lacunarity: 2.0,
             timeSpeed: 1.0,
+            zoomSpeed: 0.0,
             colorMode: 'rainbow',
             brightness: 1.0
         };
@@ -440,20 +442,44 @@ class PerlinNoise extends Animation {
         return value / maxValue;
     }
 
+    update(deltaTime) {
+        super.update(deltaTime);
+        
+        if (this.isPlaying) {
+            // Update time offset
+            this.noiseOffset += this.params.timeSpeed * deltaTime * 0.00001;
+            
+            // Update zoom level smoothly
+            if (this.params.zoomSpeed !== 0) {
+                const zoomFactor = 1 + (this.params.zoomSpeed * deltaTime * 0.00001);
+                this.zoomLevel *= zoomFactor;
+                
+                // Prevent zoom from going too extreme
+                this.zoomLevel = Math.max(0.001, Math.min(100, this.zoomLevel));
+            }
+        }
+    }
+
     render() {
         super.render();
 
-        const { scale, octaves, persistence, lacunarity, timeSpeed, colorMode, brightness } = this.params;
-        this.noiseOffset += timeSpeed * 0.01;
+        const { scale, octaves, persistence, lacunarity, colorMode, brightness } = this.params;
         
         const imageData = this.ctx.createImageData(this.width, this.height);
         const data = imageData.data;
 
+        // Apply zoom to the effective scale
+        const effectiveScale = scale * this.zoomLevel;
+
         for (let x = 0; x < this.width; x++) {
             for (let y = 0; y < this.height; y++) {
+                // Center the noise around the middle of the canvas
+                const centerX = x - this.width / 2;
+                const centerY = y - this.height / 2;
+                
                 const noiseValue = this.fractalNoise(
-                    x * scale, 
-                    y * scale, 
+                    centerX * effectiveScale, 
+                    centerY * effectiveScale, 
                     this.noiseOffset,
                     octaves,
                     persistence,
@@ -487,13 +513,20 @@ class PerlinNoise extends Animation {
         this.ctx.putImageData(imageData, 0, 0);
     }
 
+    reset() {
+        super.reset();
+        this.noiseOffset = 0;
+        this.zoomLevel = 1.0;
+    }
+
     getControlSchema() {
         return {
-            scale: { type: 'range', min: 0.001, max: 0.05, step: 0.001, label: 'Scale' },
+            scale: { type: 'range', min: 0.001, max: 0.05, step: 0.001, label: 'Base Scale' },
+            zoomSpeed: { type: 'range', min: -5.0, max: 5.0, step: 0.1, label: 'Zoom Speed' },
             octaves: { type: 'range', min: 1, max: 8, step: 1, label: 'Octaves' },
             persistence: { type: 'range', min: 0.1, max: 1.0, step: 0.1, label: 'Persistence' },
             lacunarity: { type: 'range', min: 1.0, max: 4.0, step: 0.1, label: 'Lacunarity' },
-            timeSpeed: { type: 'range', min: 0.1, max: 5.0, step: 0.1, label: 'Time Speed' },
+            timeSpeed: { type: 'range', min: 0.0, max: 5.0, step: 0.1, label: 'Time Speed' },
             brightness: { type: 'range', min: 0.1, max: 2.0, step: 0.1, label: 'Brightness' },
             colorMode: { type: 'select', options: ['rainbow', 'fire', 'monochrome'], label: 'Color Mode' }
         };
@@ -906,7 +939,8 @@ class CombinationMode extends Animation {
     getControlSchema() {
         const animationOptions = Object.keys(ANIMATIONS).filter(key => key !== 'combination');
         
-        return {
+        // Base combination controls
+        const baseControls = {
             animation1: { type: 'select', options: animationOptions, label: 'Animation 1' },
             animation2: { type: 'select', options: animationOptions, label: 'Animation 2' },
             blendMode: { type: 'select', options: ['add', 'multiply', 'screen', 'overlay', 'difference', 'exclusion', 'normal'], label: 'Blend Mode' },
@@ -915,6 +949,61 @@ class CombinationMode extends Animation {
             sync: { type: 'checkbox', label: 'Sync Animations' },
             offset2: { type: 'range', min: -2.0, max: 2.0, step: 0.1, label: 'Time Offset 2' }
         };
+
+        // Get controls from both animations if they exist
+        let animation1Controls = {};
+        let animation2Controls = {};
+
+        if (this.animations[0] && this.animations[0].getControlSchema) {
+            const schema1 = this.animations[0].getControlSchema();
+            // Prefix all animation 1 controls with 'anim1_'
+            Object.keys(schema1).forEach(key => {
+                animation1Controls[`anim1_${key}`] = {
+                    ...schema1[key],
+                    label: `1: ${schema1[key].label}`,
+                    group: 'Animation 1 Controls'
+                };
+            });
+        }
+
+        if (this.animations[1] && this.animations[1].getControlSchema) {
+            const schema2 = this.animations[1].getControlSchema();
+            // Prefix all animation 2 controls with 'anim2_'
+            Object.keys(schema2).forEach(key => {
+                animation2Controls[`anim2_${key}`] = {
+                    ...schema2[key],
+                    label: `2: ${schema2[key].label}`,
+                    group: 'Animation 2 Controls'
+                };
+            });
+        }
+
+        return {
+            ...baseControls,
+            ...animation1Controls,
+            ...animation2Controls
+        };
+    }
+
+    updateParams(newParams) {
+        const oldParams = { ...this.params };
+        super.updateParams(newParams);
+        
+        // Handle animation-specific parameter updates
+        Object.keys(newParams).forEach(key => {
+            if (key.startsWith('anim1_') && this.animations[0]) {
+                const realKey = key.substring(6); // Remove 'anim1_' prefix
+                this.animations[0].updateParams({ [realKey]: newParams[key] });
+            } else if (key.startsWith('anim2_') && this.animations[1]) {
+                const realKey = key.substring(6); // Remove 'anim2_' prefix
+                this.animations[1].updateParams({ [realKey]: newParams[key] });
+            }
+        });
+        
+        // Recreate animations if types changed
+        if (newParams.animation1 || newParams.animation2) {
+            this.createAnimations();
+        }
     }
 }
 
@@ -937,9 +1026,14 @@ class Spirograph extends Animation {
     }
 
     render() {
-        // Apply custom trail fade
-        this.ctx.fillStyle = `rgba(0, 0, 0, ${1 - this.params.trailFade})`;
-        this.ctx.fillRect(0, 0, this.width, this.height);
+        // Apply custom trail fade or clear completely if trailFade is 0
+        if (this.params.trailFade === 0) {
+            this.ctx.fillStyle = 'black';
+            this.ctx.fillRect(0, 0, this.width, this.height);
+        } else {
+            this.ctx.fillStyle = `rgba(0, 0, 0, ${1 - this.params.trailFade})`;
+            this.ctx.fillRect(0, 0, this.width, this.height);
+        }
 
         const { R, r, d, spiralSpeed, colorShift } = this.params;
         const t = this.time * spiralSpeed * 0.01;
@@ -980,10 +1074,10 @@ class Spirograph extends Animation {
         return {
             R: { type: 'range', min: 50, max: 200, step: 5, label: 'Outer Radius' },
             r: { type: 'range', min: 10, max: 80, step: 1, label: 'Inner Radius' },
-            d: { type: 'range', min: 10, max: 100, step: 1, label: 'Distance' },
+            d: { type:'range', min: 10, max: 100, step: 1, label: 'Distance' },
             spiralSpeed: { type: 'range', min: 0.1, max: 3.0, step: 0.1, label: 'Speed' },
             colorShift: { type: 'range', min: 0, max: 1, step: 0.01, label: 'Color Shift' },
-            trailFade: { type: 'range', min: 0.9, max: 0.999, step: 0.001, label: 'Trail Fade' }
+            trailFade: { type: 'range', min: 0.0, max: 0.999, step: 0.001, label: 'Trail Fade' }
         };
     }
 }
