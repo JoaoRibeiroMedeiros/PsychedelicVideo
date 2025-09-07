@@ -7,8 +7,11 @@ class PsychedelicApp {
     constructor() {
         this.canvas = document.getElementById('canvas');
         this.animation = null;
+        this.animation2 = null;
+        this.combinationAnimation = null;
         this.animationFrame = null;
         this.lastTime = 0;
+        this.mixerMode = false;
         
         this.initializeUI();
         this.createAnimation('rotating_polygons');
@@ -16,9 +19,49 @@ class PsychedelicApp {
     }
 
     initializeUI() {
-        // Animation type selector
+        // Mixer toggle button
+        document.getElementById('mixerToggle').addEventListener('click', () => {
+            this.toggleMixerMode();
+        });
+
+        // Animation type selectors
         document.getElementById('animationType').addEventListener('change', (e) => {
-            this.createAnimation(e.target.value);
+            if (this.mixerMode) {
+                this.updateMixerAnimation(1, e.target.value);
+            } else {
+                this.createAnimation(e.target.value);
+            }
+        });
+
+        document.getElementById('animationType2').addEventListener('change', (e) => {
+            if (this.mixerMode) {
+                this.updateMixerAnimation(2, e.target.value);
+            }
+        });
+
+        // Mixer controls
+        document.getElementById('blendMode').addEventListener('change', (e) => {
+            if (this.combinationAnimation) {
+                this.combinationAnimation.updateParams({ blendMode: e.target.value });
+            }
+        });
+
+        this.setupSlider('volume1', (value) => {
+            if (this.combinationAnimation) {
+                this.combinationAnimation.updateParams({ opacity1: parseFloat(value) });
+            }
+        });
+
+        this.setupSlider('volume2', (value) => {
+            if (this.combinationAnimation) {
+                this.combinationAnimation.updateParams({ opacity2: parseFloat(value) });
+            }
+        });
+
+        document.getElementById('syncTracks').addEventListener('change', (e) => {
+            if (this.combinationAnimation) {
+                this.combinationAnimation.updateParams({ sync: e.target.checked });
+            }
         });
 
         // Playback controls
@@ -90,6 +133,71 @@ class PsychedelicApp {
         
         this.setupAnimationControls();
         this.updatePlayPauseButton();
+    }
+
+    toggleMixerMode() {
+        this.mixerMode = !this.mixerMode;
+        const toggleButton = document.getElementById('mixerToggle');
+        const track2 = document.getElementById('track2');
+        const mixerControls = document.getElementById('mixerControls');
+
+        if (this.mixerMode) {
+            // Enable mixer mode
+            toggleButton.textContent = '🎛️ Disable Mixer Mode';
+            toggleButton.classList.add('active');
+            track2.style.display = 'block';
+            mixerControls.style.display = 'block';
+            
+            // Create combination animation
+            this.createCombinationAnimation();
+        } else {
+            // Disable mixer mode
+            toggleButton.textContent = '🎛️ Enable Mixer Mode';
+            toggleButton.classList.remove('active');
+            track2.style.display = 'none';
+            mixerControls.style.display = 'none';
+            
+            // Return to single animation mode
+            if (this.combinationAnimation) {
+                this.combinationAnimation.pause();
+                this.combinationAnimation = null;
+            }
+            
+            // Restart the main animation
+            const currentType = document.getElementById('animationType').value;
+            this.createAnimation(currentType);
+        }
+    }
+
+    createCombinationAnimation() {
+        const type1 = document.getElementById('animationType').value;
+        const type2 = document.getElementById('animationType2').value;
+        
+        if (this.animation) {
+            this.animation.pause();
+        }
+        
+        this.combinationAnimation = createAnimation('combination', this.canvas, {
+            animation1: type1,
+            animation2: type2,
+            blendMode: document.getElementById('blendMode').value,
+            opacity1: parseFloat(document.getElementById('volume1').value),
+            opacity2: parseFloat(document.getElementById('volume2').value),
+            sync: document.getElementById('syncTracks').checked
+        });
+        
+        this.combinationAnimation.play();
+        this.setupAnimationControls();
+        this.updatePlayPauseButton();
+    }
+
+    updateMixerAnimation(track, type) {
+        if (this.combinationAnimation) {
+            const params = {};
+            params[`animation${track}`] = type;
+            this.combinationAnimation.updateParams(params);
+            this.setupAnimationControls();
+        }
     }
 
     setupAnimationControls() {
@@ -262,7 +370,10 @@ class PsychedelicApp {
             const deltaTime = currentTime - this.lastTime;
             this.lastTime = currentTime;
             
-            if (this.animation) {
+            if (this.mixerMode && this.combinationAnimation) {
+                this.combinationAnimation.update(deltaTime);
+                this.combinationAnimation.render();
+            } else if (this.animation) {
                 this.animation.update(deltaTime);
                 this.animation.render();
             }
@@ -274,30 +385,33 @@ class PsychedelicApp {
     }
 
     togglePlayPause() {
-        if (this.animation.isPlaying) {
-            this.animation.pause();
+        const currentAnimation = this.mixerMode ? this.combinationAnimation : this.animation;
+        if (currentAnimation.isPlaying) {
+            currentAnimation.pause();
         } else {
-            this.animation.play();
+            currentAnimation.play();
         }
         this.updatePlayPauseButton();
     }
 
     updatePlayPauseButton() {
         const button = document.getElementById('playPause');
-        button.textContent = this.animation.isPlaying ? '⏸️ Pause' : '▶️ Play';
+        const currentAnimation = this.mixerMode ? this.combinationAnimation : this.animation;
+        button.textContent = currentAnimation.isPlaying ? '⏸️ Pause' : '▶️ Play';
     }
 
     reset() {
-        this.animation.reset();
+        const currentAnimation = this.mixerMode ? this.combinationAnimation : this.animation;
+        currentAnimation.reset();
         
         // Reinitialize particles if it's a particle system
-        if (this.animation.initializeParticles) {
-            this.animation.initializeParticles();
+        if (currentAnimation.initializeParticles) {
+            currentAnimation.initializeParticles();
         }
         
         // Clear spirograph trail
-        if (this.animation.trailPoints) {
-            this.animation.trailPoints = [];
+        if (currentAnimation.trailPoints) {
+            currentAnimation.trailPoints = [];
         }
     }
 

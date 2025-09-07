@@ -132,6 +132,61 @@
             margin-left: 10px;
         }
 
+        /* Mixer Interface Styles */
+        .mixer-toggle-container {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .mixer-toggle {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            border: 2px solid #4ecdc4;
+            font-size: 0.9em;
+            padding: 8px 16px;
+        }
+
+        .mixer-toggle.active {
+            background: linear-gradient(45deg, #4ecdc4, #ff6b6b);
+            box-shadow: 0 0 15px rgba(78, 205, 196, 0.5);
+        }
+
+        .track-container {
+            border: 1px solid rgba(78, 205, 196, 0.3);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .track-header h3 {
+            color: #ff6b6b;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        #track2 .track-header h3 {
+            color: #4ecdc4;
+        }
+
+        .mixer-controls {
+            border: 2px solid #4ecdc4;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: rgba(78, 205, 196, 0.1);
+        }
+
+        .mixer-controls h3 {
+            color: #4ecdc4;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        /* Animation for showing/hiding tracks */
+        .track-container, .mixer-controls {
+            transition: all 0.3s ease-in-out;
+        }
+
         @media (max-width: 768px) {
             .main-container {
                 flex-direction: column;
@@ -155,18 +210,76 @@
         </div>
 
         <div class="controls">
-            <div class="control-group">
-                <h3>Animation Type</h3>
-                <div class="control">
-                    <select id="animationType">
-                        <option value="rotating_polygons">Rotating Polygons</option>
-                        <option value="wave_interference">Wave Interference</option>
-                        <option value="particle_system">Particle System</option>
-                        <option value="perlin_noise">Perlin Noise</option>
-                        <option value="fractal">Fractal</option>
-                        <option value="combination">Combination Mode</option>
-                        <option value="spirograph">Spirograph</option>
-                    </select>
+            <!-- Mixer Toggle Button -->
+            <div class="mixer-toggle-container">
+                <button class="button mixer-toggle" id="mixerToggle">
+                    🎛️ Enable Mixer Mode
+                </button>
+            </div>
+
+            <!-- Track 1 (Main Animation) -->
+            <div class="track-container" id="track1">
+                <div class="control-group track-header">
+                    <h3>🎵 Track 1</h3>
+                    <div class="control">
+                        <select id="animationType">
+                            <option value="rotating_polygons">Rotating Polygons</option>
+                            <option value="wave_interference">Wave Interference</option>
+                            <option value="particle_system">Particle System</option>
+                            <option value="perlin_noise">Perlin Noise</option>
+                            <option value="fractal">Fractal</option>
+                            <option value="spirograph">Spirograph</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Track 2 (Hidden by default) -->
+            <div class="track-container" id="track2" style="display: none;">
+                <div class="control-group track-header">
+                    <h3>🎵 Track 2</h3>
+                    <div class="control">
+                        <select id="animationType2">
+                            <option value="rotating_polygons">Rotating Polygons</option>
+                            <option value="wave_interference">Wave Interference</option>
+                            <option value="particle_system">Particle System</option>
+                            <option value="perlin_noise">Perlin Noise</option>
+                            <option value="fractal">Fractal</option>
+                            <option value="spirograph">Spirograph</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mixer Controls (Hidden by default) -->
+            <div class="mixer-controls" id="mixerControls" style="display: none;">
+                <div class="control-group">
+                    <h3>🎛️ Mixer</h3>
+                    <div class="control">
+                        <label>Blend Mode</label>
+                        <select id="blendMode">
+                            <option value="add">Add</option>
+                            <option value="multiply">Multiply</option>
+                            <option value="screen">Screen</option>
+                            <option value="overlay">Overlay</option>
+                            <option value="difference">Difference</option>
+                            <option value="exclusion">Exclusion</option>
+                            <option value="normal">Normal</option>
+                        </select>
+                    </div>
+                    <div class="control">
+                        <label>Track 1 Volume <span class="value-display" id="volume1Value">0.7</span></label>
+                        <input type="range" id="volume1" min="0.0" max="1.0" step="0.1" value="0.7">
+                    </div>
+                    <div class="control">
+                        <label>Track 2 Volume <span class="value-display" id="volume2Value">0.7</span></label>
+                        <input type="range" id="volume2" min="0.0" max="1.0" step="0.1" value="0.7">
+                    </div>
+                    <div class="control">
+                        <label>
+                            <input type="checkbox" id="syncTracks" checked> Sync Tracks
+                        </label>
+                    </div>
                 </div>
             </div>
 
