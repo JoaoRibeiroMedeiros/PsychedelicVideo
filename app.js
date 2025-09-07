@@ -99,83 +99,162 @@ class PsychedelicApp {
         const schema = this.animation.getControlSchema();
         
         if (Object.keys(schema).length > 0) {
-            const groupDiv = document.createElement('div');
-            groupDiv.className = 'control-group';
-            
-            const title = document.createElement('h3');
-            title.textContent = 'Animation Settings';
-            groupDiv.appendChild(title);
+            // Group controls by their group property (for combination mode)
+            const groupedControls = {};
+            const ungroupedControls = {};
             
             Object.entries(schema).forEach(([key, config]) => {
-                const controlDiv = document.createElement('div');
-                controlDiv.className = 'control';
-                
-                if (config.type === 'range') {
-                    const label = document.createElement('label');
-                    const valueSpan = document.createElement('span');
-                    valueSpan.className = 'value-display';
-                    valueSpan.textContent = this.animation.params[key];
-                    label.innerHTML = `${config.label} `;
-                    label.appendChild(valueSpan);
-                    
-                    const input = document.createElement('input');
-                    input.type = 'range';
-                    input.min = config.min;
-                    input.max = config.max;
-                    input.step = config.step;
-                    input.value = this.animation.params[key];
-                    
-                    input.addEventListener('input', (e) => {
-                        const value = parseFloat(e.target.value);
-                        valueSpan.textContent = value;
-                        this.animation.updateParams({ [key]: value });
-                    });
-                    
-                    controlDiv.appendChild(label);
-                    controlDiv.appendChild(input);
-                    
-                } else if (config.type === 'select') {
-                    const label = document.createElement('label');
-                    label.textContent = config.label;
-                    
-                    const select = document.createElement('select');
-                    config.options.forEach(option => {
-                        const optionElement = document.createElement('option');
-                        optionElement.value = option;
-                        optionElement.textContent = option;
-                        if (option === this.animation.params[key]) {
-                            optionElement.selected = true;
-                        }
-                        select.appendChild(optionElement);
-                    });
-                    
-                    select.addEventListener('change', (e) => {
-                        this.animation.updateParams({ [key]: e.target.value });
-                    });
-                    
-                    controlDiv.appendChild(label);
-                    controlDiv.appendChild(select);
-                    
-                } else if (config.type === 'checkbox') {
-                    const label = document.createElement('label');
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.checked = this.animation.params[key];
-                    
-                    checkbox.addEventListener('change', (e) => {
-                        this.animation.updateParams({ [key]: e.target.checked });
-                    });
-                    
-                    label.appendChild(checkbox);
-                    label.appendChild(document.createTextNode(' ' + config.label));
-                    controlDiv.appendChild(label);
+                if (config.group) {
+                    if (!groupedControls[config.group]) {
+                        groupedControls[config.group] = {};
+                    }
+                    groupedControls[config.group][key] = config;
+                } else {
+                    ungroupedControls[key] = config;
                 }
-                
-                groupDiv.appendChild(controlDiv);
             });
             
-            controlsContainer.appendChild(groupDiv);
+            // Create ungrouped controls first (main controls)
+            if (Object.keys(ungroupedControls).length > 0) {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'control-group';
+                
+                const title = document.createElement('h3');
+                title.textContent = 'Animation Settings';
+                groupDiv.appendChild(title);
+                
+                this.createControlsForGroup(ungroupedControls, groupDiv);
+                controlsContainer.appendChild(groupDiv);
+            }
+            
+            // Create grouped controls (for combination mode)
+            Object.entries(groupedControls).forEach(([groupName, controls]) => {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'control-group mixer-track';
+                
+                const title = document.createElement('h3');
+                title.textContent = groupName;
+                title.style.color = groupName.includes('Animation 1') ? '#ff6b6b' : '#4ecdc4';
+                groupDiv.appendChild(title);
+                
+                this.createControlsForGroup(controls, groupDiv);
+                controlsContainer.appendChild(groupDiv);
+            });
         }
+    }
+
+    createControlsForGroup(controls, parentElement) {
+        Object.entries(controls).forEach(([key, config]) => {
+            const controlDiv = document.createElement('div');
+            controlDiv.className = 'control';
+            
+            if (config.type === 'range') {
+                const label = document.createElement('label');
+                const valueSpan = document.createElement('span');
+                valueSpan.className = 'value-display';
+                
+                // Get the current value - handle prefixed keys for combination mode
+                let currentValue;
+                if (key.startsWith('anim1_') || key.startsWith('anim2_')) {
+                    // For combination mode, get value from the specific animation
+                    const animIndex = key.startsWith('anim1_') ? 0 : 1;
+                    const realKey = key.substring(6);
+                    if (this.animation.animations && this.animation.animations[animIndex]) {
+                        currentValue = this.animation.animations[animIndex].params[realKey];
+                    } else {
+                        currentValue = config.min || 0;
+                    }
+                } else {
+                    currentValue = this.animation.params[key];
+                }
+                
+                valueSpan.textContent = currentValue;
+                label.innerHTML = `${config.label} `;
+                label.appendChild(valueSpan);
+                
+                const input = document.createElement('input');
+                input.type = 'range';
+                input.min = config.min;
+                input.max = config.max;
+                input.step = config.step;
+                input.value = currentValue;
+                
+                input.addEventListener('input', (e) => {
+                    const value = parseFloat(e.target.value);
+                    valueSpan.textContent = value;
+                    this.animation.updateParams({ [key]: value });
+                });
+                
+                controlDiv.appendChild(label);
+                controlDiv.appendChild(input);
+                
+            } else if (config.type === 'select') {
+                const label = document.createElement('label');
+                label.textContent = config.label;
+                
+                const select = document.createElement('select');
+                config.options.forEach(option => {
+                    const optionElement = document.createElement('option');
+                    optionElement.value = option;
+                    optionElement.textContent = option;
+                    
+                    // Get current value for comparison
+                    let currentValue;
+                    if (key.startsWith('anim1_') || key.startsWith('anim2_')) {
+                        const animIndex = key.startsWith('anim1_') ? 0 : 1;
+                        const realKey = key.substring(6);
+                        if (this.animation.animations && this.animation.animations[animIndex]) {
+                            currentValue = this.animation.animations[animIndex].params[realKey];
+                        }
+                    } else {
+                        currentValue = this.animation.params[key];
+                    }
+                    
+                    if (option === currentValue) {
+                        optionElement.selected = true;
+                    }
+                    select.appendChild(optionElement);
+                });
+                
+                select.addEventListener('change', (e) => {
+                    this.animation.updateParams({ [key]: e.target.value });
+                });
+                
+                controlDiv.appendChild(label);
+                controlDiv.appendChild(select);
+                
+            } else if (config.type === 'checkbox') {
+                const label = document.createElement('label');
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                
+                // Get current value
+                let currentValue;
+                if (key.startsWith('anim1_') || key.startsWith('anim2_')) {
+                    const animIndex = key.startsWith('anim1_') ? 0 : 1;
+                    const realKey = key.substring(6);
+                    if (this.animation.animations && this.animation.animations[animIndex]) {
+                        currentValue = this.animation.animations[animIndex].params[realKey];
+                    } else {
+                        currentValue = false;
+                    }
+                } else {
+                    currentValue = this.animation.params[key];
+                }
+                
+                checkbox.checked = currentValue;
+                
+                checkbox.addEventListener('change', (e) => {
+                    this.animation.updateParams({ [key]: e.target.checked });
+                });
+                
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(' ' + config.label));
+                controlDiv.appendChild(label);
+            }
+            
+            parentElement.appendChild(controlDiv);
+        });
     }
 
     startAnimationLoop() {
